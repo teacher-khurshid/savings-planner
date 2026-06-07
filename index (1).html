@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Savings Planner</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242836;
+    --accent: #6c5ce7;
+    --accent-glow: rgba(108, 92, 231, 0.25);
+    --green: #00b894;
+    --green-glow: rgba(0, 184, 148, 0.2);
+    --orange: #fdcb6e;
+    --red: #e17055;
+    --text: #f0f0f5;
+    --text-dim: #8a8da0;
+    --text-faint: #555870;
+    --radius: 16px;
+    --radius-sm: 10px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    padding-bottom: 90px;
+  }
+
+  /* ── Header ── */
+  .header {
+    padding: 20px 20px 16px;
+    background: linear-gradient(135deg, var(--accent) 0%, #8b5cf6 100%);
+    position: relative;
+    overflow: hidden;
+  }
+  .header::after {
+    content: '';
+    position: absolute;
+    top: -50%; right: -30%;
+    width: 200px; height: 200px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 50%;
+  }
+  .header h1 {
+    font-family: 'Space Mono', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  .header .subtitle {
+    font-size: 13px;
+    opacity: 0.8;
+    margin-top: 4px;
+  }
+  .header .total-saved {
+    margin-top: 14px;
+    font-family: 'Space Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+  }
+  .header .total-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    opacity: 0.7;
+    margin-top: 2px;
+  }
+
+  /* ── Bottom Nav ── */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--surface2);
+    display: flex;
+    z-index: 100;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  .nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 0 8px;
+    font-size: 11px;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: color 0.2s;
+    border: none;
+    background: none;
+    font-family: inherit;
+  }
+  .nav-item.active { color: var(--accent); }
+  .nav-item svg { width: 22px; height: 22px; margin-bottom: 3px; }
+
+  /* ── Tabs Content ── */
+  .tab-content { display: none; padding: 16px 20px; }
+  .tab-content.active { display: block; animation: fadeUp 0.3s ease; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Calendar ── */
+  .cal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .cal-header h2 {
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .cal-nav {
+    display: flex; gap: 8px;
+  }
+  .cal-nav button {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    border: 1px solid var(--surface2);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+  .cal-day-label {
+    font-size: 11px;
+    color: var(--text-faint);
+    text-align: center;
+    padding: 6px 0;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .cal-day {
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.15s;
+    border: none;
+    background: none;
+    color: var(--text);
+    font-family: inherit;
+  }
+  .cal-day:hover { background: var(--surface2); }
+  .cal-day.today {
+    background: var(--surface2);
+    font-weight: 700;
+    border: 1px solid var(--accent);
+  }
+  .cal-day.has-goal::after {
+    content: '';
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    position: absolute;
+    bottom: 5px;
+  }
+  .cal-day.has-goal-urgent::after { background: var(--orange); }
+  .cal-day.empty { cursor: default; }
+  .cal-day.past { color: var(--text-faint); }
+
+  /* ── Goals List ── */
+  .section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+    margin-top: 8px;
+  }
+
+  .goal-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 10px;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.15s;
+    border: 1px solid transparent;
+  }
+  .goal-card:active { transform: scale(0.98); }
+  .goal-card.completed { border-color: var(--green); }
+
+  .goal-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+  }
+  .goal-name {
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .goal-currency {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    background: var(--surface2);
+    color: var(--text-dim);
+  }
+  .goal-amounts {
+    font-family: 'Space Mono', monospace;
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+  .goal-amounts .saved { color: var(--green); }
+  .goal-amounts .target { color: var(--text-dim); }
+
+  .progress-bar {
+    height: 6px;
+    background: var(--surface2);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent), #8b5cf6);
+    transition: width 0.5s ease;
+  }
+  .goal-card.completed .progress-fill {
+    background: linear-gradient(90deg, var(--green), #55efc4);
+  }
+
+  .goal-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .goal-meta .days-left { color: var(--orange); }
+  .goal-meta .days-left.overdue { color: var(--red); }
+
+  /* ── Floating Add Button ── */
+  .fab {
+    position: fixed;
+    bottom: 75px;
+    right: 20px;
+    width: 54px; height: 54px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #8b5cf6);
+    border: none;
+    color: white;
+    font-size: 28px;
+    cursor: pointer;
+    box-shadow: 0 4px 20px var(--accent-glow);
+    z-index: 99;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+  }
+  .fab:active { transform: scale(0.9); }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 200;
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.active { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border-radius: 20px 20px 0 0;
+    width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 24px 20px 40px;
+    animation: slideUp 0.3s ease;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  .modal-handle {
+    width: 36px; height: 4px;
+    background: var(--surface2);
+    border-radius: 2px;
+    margin: 0 auto 20px;
+  }
+  .modal h2 {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 20px;
+  }
+
+  .form-group {
+    margin-bottom: 16px;
+  }
+  .form-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 8px;
+  }
+  .form-group input, .form-group select {
+    width: 100%;
+    padding: 12px 14px;
+    background: var(--bg);
+    border: 1px solid var(--surface2);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 15px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-group input:focus, .form-group select:focus {
+    border-color: var(--accent);
+  }
+
+  .currency-toggle {
+    display: flex; gap: 8px;
+  }
+  .currency-toggle button {
+    flex: 1;
+    padding: 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--surface2);
+    background: var(--bg);
+    color: var(--text-dim);
+    font-family: 'Space Mono', monospace;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .currency-toggle button.active {
+    border-color: var(--accent);
+    background: var(--accent-glow);
+    color: var(--text);
+  }
+
+  .reminder-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .reminder-options button {
+    padding: 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--surface2);
+    background: var(--bg);
+    color: var(--text-dim);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  .reminder-options button.active {
+    border-color: var(--accent);
+    background: var(--accent-glow);
+    color: var(--text);
+  }
+
+  .btn-primary {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: linear-gradient(135deg, var(--accent), #8b5cf6);
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: opacity 0.2s;
+  }
+  .btn-primary:active { opacity: 0.8; }
+
+  .btn-danger {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--red);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--red);
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    margin-top: 8px;
+  }
+
+  .btn-secondary {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--green);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--green);
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    margin-top: 8px;
+    font-weight: 600;
+  }
+
+  /* ── Log Savings Modal ── */
+  .quick-amounts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .quick-amounts button {
+    padding: 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--surface2);
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .quick-amounts button:active {
+    background: var(--accent-glow);
+    border-color: var(--accent);
+  }
+
+  /* ── Empty State ── */
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-dim);
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-state p { font-size: 14px; line-height: 1.6; }
+
+  /* ── Progress Tab ── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 14px;
+  }
+  .stat-card .label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 6px;
+  }
+  .stat-card .value {
+    font-family: 'Space Mono', monospace;
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .stat-card .value.green { color: var(--green); }
+  .stat-card .value.accent { color: var(--accent); }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-100px);
+    background: var(--green);
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 30px;
+    font-size: 14px;
+    font-weight: 600;
+    z-index: 999;
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <h1>Savings Planner</h1>
+  <div class="subtitle">Your personal finance goals</div>
+  <div class="total-label">Total Saved</div>
+  <div class="total-saved" id="totalSaved">$0</div>
+</div>
+
+<!-- Tab: Calendar -->
+<div class="tab-content active" id="tab-calendar">
+  <div class="cal-header">
+    <h2 id="calMonthYear"></h2>
+    <div class="cal-nav">
+      <button onclick="changeMonth(-1)">‹</button>
+      <button onclick="changeMonth(1)">›</button>
+    </div>
+  </div>
+  <div class="cal-grid" id="calGrid"></div>
+
+  <div style="margin-top: 20px;">
+    <div class="section-title" id="calGoalsTitle" style="display:none;">Goals this month</div>
+    <div id="calGoalsList"></div>
+  </div>
+</div>
+
+<!-- Tab: Goals -->
+<div class="tab-content" id="tab-goals">
+  <div class="section-title">Active Goals</div>
+  <div id="activeGoals"></div>
+  <div class="section-title" style="margin-top:24px;">Completed</div>
+  <div id="completedGoals"></div>
+</div>
+
+<!-- Tab: Progress -->
+<div class="tab-content" id="tab-progress">
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="label">Active Goals</div>
+      <div class="value accent" id="statActive">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Completed</div>
+      <div class="value green" id="statCompleted">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Total Saved (USD)</div>
+      <div class="value green" id="statSavedUSD">$0</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Total Saved (UZS)</div>
+      <div class="value green" id="statSavedUZS">0 soʻm</div>
+    </div>
+  </div>
+  <div class="section-title">All Goals Progress</div>
+  <div id="progressGoals"></div>
+</div>
+
+<!-- FAB -->
+<button class="fab" onclick="openNewGoal()">+</button>
+
+<!-- Bottom Nav -->
+<div class="bottom-nav">
+  <button class="nav-item active" onclick="switchTab('calendar', this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    Calendar
+  </button>
+  <button class="nav-item" onclick="switchTab('goals', this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+    Goals
+  </button>
+  <button class="nav-item" onclick="switchTab('progress', this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+    Progress
+  </button>
+</div>
+
+<!-- New Goal Modal -->
+<div class="modal-overlay" id="newGoalModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2 id="modalTitle">New Goal</h2>
+
+    <div class="form-group">
+      <label>Goal Name</label>
+      <input type="text" id="goalName" placeholder="e.g. MacBook, Trip, Emergency Fund">
+    </div>
+
+    <div class="form-group">
+      <label>Currency</label>
+      <div class="currency-toggle">
+        <button class="active" onclick="setCurrency('USD', this)">USD $</button>
+        <button onclick="setCurrency('UZS', this)">UZS soʻm</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Target Amount</label>
+      <input type="number" id="goalTarget" placeholder="0" inputmode="numeric">
+    </div>
+
+    <div class="form-group">
+      <label>Deadline</label>
+      <input type="date" id="goalDeadline">
+    </div>
+
+    <div class="form-group">
+      <label>Remind Me</label>
+      <div class="reminder-options">
+        <button onclick="setReminder('daily', this)">Daily</button>
+        <button class="active" onclick="setReminder('weekly', this)">Weekly</button>
+        <button onclick="setReminder('monthly', this)">Monthly</button>
+        <button onclick="setReminder('none', this)">None</button>
+      </div>
+    </div>
+
+    <button class="btn-primary" id="saveGoalBtn" onclick="saveGoal()">Create Goal</button>
+    <button class="btn-danger" id="deleteGoalBtn" style="display:none;" onclick="deleteGoal()">Delete Goal</button>
+    <div style="height:12px;"></div>
+    <button style="width:100%;padding:12px;border:none;background:none;color:var(--text-dim);font-family:inherit;font-size:14px;cursor:pointer;" onclick="closeModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- Log Savings Modal -->
+<div class="modal-overlay" id="logSavingsModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>Log Savings</h2>
+    <p style="color:var(--text-dim);font-size:14px;margin-bottom:16px;" id="logGoalInfo"></p>
+
+    <div class="form-group">
+      <label>Quick Add</label>
+      <div class="quick-amounts" id="quickAmounts"></div>
+    </div>
+
+    <div class="form-group">
+      <label>Custom Amount</label>
+      <input type="number" id="logAmount" placeholder="0" inputmode="numeric">
+    </div>
+
+    <button class="btn-primary" onclick="confirmLog()">+ Add Savings</button>
+    <button class="btn-secondary" id="markCompleteBtn" onclick="markComplete()" style="display:none;">✓ Mark as Complete</button>
+    <div style="height:12px;"></div>
+    <button style="width:100%;padding:12px;border:none;background:none;color:var(--text-dim);font-family:inherit;font-size:14px;cursor:pointer;" onclick="closeLogModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── State ──
+  let goals = [];
+  let currentMonth = new Date().getMonth();
+  let currentYear = new Date().getFullYear();
+  let selectedCurrency = 'USD';
+  let selectedReminder = 'weekly';
+  let editingGoalId = null;
+  let loggingGoalId = null;
+
+  const tg = window.Telegram && window.Telegram.WebApp;
+
+  // ── CloudStorage helpers ──
+  function csGet(key) {
+    return new Promise((resolve) => {
+      if (tg && tg.CloudStorage) {
+        tg.CloudStorage.getItem(key, (err, val) => {
+          if (err || !val) resolve(null);
+          else {
+            try { resolve(JSON.parse(val)); } catch { resolve(null); }
+          }
+        });
+      } else {
+        const val = localStorage.getItem(key);
+        try { resolve(val ? JSON.parse(val) : null); } catch { resolve(null); }
+      }
+    });
+  }
+
+  function csSet(key, value) {
+    return new Promise((resolve) => {
+      const str = JSON.stringify(value);
+      if (tg && tg.CloudStorage) {
+        tg.CloudStorage.setItem(key, str, () => resolve());
+      } else {
+        localStorage.setItem(key, str);
+        resolve();
+      }
+    });
+  }
+
+  // ── Init ──
+  async function init() {
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      tg.setHeaderColor('#0f1117');
+      tg.setBackgroundColor('#0f1117');
+    }
+
+    const stored = await csGet('savings_goals');
+    if (stored && Array.isArray(stored)) goals = stored;
+
+    renderAll();
+  }
+
+  function renderAll() {
+    renderCalendar();
+    renderGoals();
+    renderProgress();
+    renderHeader();
+  }
+
+  // ── Save to storage ──
+  async function persistGoals() {
+    await csSet('savings_goals', goals);
+    sendRemindersToBot();
+  }
+
+  // ── Send reminder data to bot ──
+  function sendRemindersToBot() {
+    if (!tg) return;
+    const reminders = goals
+      .filter(g => !g.completed && g.reminder !== 'none')
+      .map(g => ({
+        id: g.id, name: g.name, target: g.target, saved: g.saved,
+        currency: g.currency, deadline: g.deadline, reminder: g.reminder
+      }));
+    try {
+      tg.sendData(JSON.stringify({ type: 'reminders', data: reminders }));
+    } catch (e) { /* not critical */ }
+  }
+
+  // ── Header ──
+  function renderHeader() {
+    let totalUSD = 0, totalUZS = 0;
+    goals.forEach(g => {
+      if (g.currency === 'USD') totalUSD += g.saved;
+      else totalUZS += g.saved;
+    });
+
+    let parts = [];
+    if (totalUSD > 0) parts.push('$' + totalUSD.toLocaleString());
+    if (totalUZS > 0) parts.push(totalUZS.toLocaleString() + ' soʻm');
+    document.getElementById('totalSaved').textContent = parts.length ? parts.join(' + ') : '$0';
+  }
+
+  // ── Calendar ──
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const DAYS = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+
+  function renderCalendar() {
+    document.getElementById('calMonthYear').textContent = MONTHS[currentMonth] + ' ' + currentYear;
+
+    const grid = document.getElementById('calGrid');
+    grid.innerHTML = '';
+
+    DAYS.forEach(d => {
+      const el = document.createElement('div');
+      el.className = 'cal-day-label';
+      el.textContent = d;
+      grid.appendChild(el);
+    });
+
+    const firstDay = new Date(currentYear, currentMonth, 1);
+    let startDay = firstDay.getDay() - 1;
+    if (startDay < 0) startDay = 6;
+
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const today = new Date();
+
+    for (let i = 0; i < startDay; i++) {
+      const el = document.createElement('div');
+      el.className = 'cal-day empty';
+      grid.appendChild(el);
+    }
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const el = document.createElement('button');
+      el.className = 'cal-day';
+      el.textContent = d;
+
+      const date = new Date(currentYear, currentMonth, d);
+      const dateStr = formatDate(date);
+
+      if (date.toDateString() === today.toDateString()) el.classList.add('today');
+      if (date < today && date.toDateString() !== today.toDateString()) el.classList.add('past');
+
+      const dayGoals = goals.filter(g => g.deadline === dateStr);
+      if (dayGoals.length) {
+        const daysLeft = Math.ceil((date - today) / 86400000);
+        el.classList.add(daysLeft <= 7 && daysLeft >= 0 ? 'has-goal-urgent' : 'has-goal');
+      }
+
+      el.onclick = () => openNewGoal(dateStr);
+      grid.appendChild(el);
+    }
+
+    // Show month's goals
+    const monthGoals = goals.filter(g => {
+      const d = new Date(g.deadline);
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    });
+
+    const title = document.getElementById('calGoalsTitle');
+    const list = document.getElementById('calGoalsList');
+    if (monthGoals.length) {
+      title.style.display = 'block';
+      list.innerHTML = monthGoals.map(g => renderGoalCard(g)).join('');
+    } else {
+      title.style.display = 'none';
+      list.innerHTML = '';
+    }
+  }
+
+  function changeMonth(delta) {
+    currentMonth += delta;
+    if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+    if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+    renderCalendar();
+  }
+
+  // ── Goals ──
+  function renderGoals() {
+    const active = goals.filter(g => !g.completed);
+    const completed = goals.filter(g => g.completed);
+
+    const activeEl = document.getElementById('activeGoals');
+    const completedEl = document.getElementById('completedGoals');
+
+    if (active.length) {
+      activeEl.innerHTML = active.map(g => renderGoalCard(g)).join('');
+    } else {
+      activeEl.innerHTML = '<div class="empty-state"><div class="icon">🎯</div><p>No active goals yet.<br>Tap + to create your first savings goal!</p></div>';
+    }
+
+    if (completed.length) {
+      completedEl.innerHTML = completed.map(g => renderGoalCard(g)).join('');
+    } else {
+      completedEl.innerHTML = '<div class="empty-state"><p style="color:var(--text-faint);">Completed goals will appear here.</p></div>';
+    }
+  }
+
+  function renderGoalCard(g) {
+    const pct = g.target > 0 ? Math.min(100, Math.round(g.saved / g.target * 100)) : 0;
+    const today = new Date();
+    const deadline = new Date(g.deadline);
+    const daysLeft = Math.ceil((deadline - today) / 86400000);
+    const sym = g.currency === 'USD' ? '$' : '';
+    const suffix = g.currency === 'UZS' ? ' soʻm' : '';
+
+    let daysText, daysClass = '';
+    if (g.completed) {
+      daysText = '✓ Completed';
+      daysClass = '';
+    } else if (daysLeft < 0) {
+      daysText = Math.abs(daysLeft) + ' days overdue';
+      daysClass = 'overdue';
+    } else if (daysLeft === 0) {
+      daysText = 'Due today!';
+      daysClass = 'overdue';
+    } else {
+      daysText = daysLeft + ' days left';
+    }
+
+    return `
+      <div class="goal-card ${g.completed ? 'completed' : ''}" onclick="openGoalActions('${g.id}')">
+        <div class="goal-top">
+          <div class="goal-name">${escHtml(g.name)}</div>
+          <div class="goal-currency">${g.currency}</div>
+        </div>
+        <div class="goal-amounts">
+          <span class="saved">${sym}${g.saved.toLocaleString()}${suffix}</span>
+          <span class="target"> / ${sym}${g.target.toLocaleString()}${suffix}</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+        <div class="goal-meta">
+          <span>${pct}%</span>
+          <span class="days-left ${daysClass}">${daysText}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  // ── Progress ──
+  function renderProgress() {
+    const active = goals.filter(g => !g.completed);
+    const completed = goals.filter(g => g.completed);
+
+    let savedUSD = 0, savedUZS = 0;
+    goals.forEach(g => {
+      if (g.currency === 'USD') savedUSD += g.saved;
+      else savedUZS += g.saved;
+    });
+
+    document.getElementById('statActive').textContent = active.length;
+    document.getElementById('statCompleted').textContent = completed.length;
+    document.getElementById('statSavedUSD').textContent = '$' + savedUSD.toLocaleString();
+    document.getElementById('statSavedUZS').textContent = savedUZS.toLocaleString() + ' soʻm';
+
+    const el = document.getElementById('progressGoals');
+    if (goals.length) {
+      el.innerHTML = goals.map(g => renderGoalCard(g)).join('');
+    } else {
+      el.innerHTML = '<div class="empty-state"><p>Create some goals to see your progress here.</p></div>';
+    }
+  }
+
+  // ── Tab switching ──
+  function switchTab(name, btn) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  // ── New Goal Modal ──
+  function openNewGoal(presetDate) {
+    editingGoalId = null;
+    document.getElementById('modalTitle').textContent = 'New Goal';
+    document.getElementById('goalName').value = '';
+    document.getElementById('goalTarget').value = '';
+    document.getElementById('goalDeadline').value = presetDate || '';
+    document.getElementById('saveGoalBtn').textContent = 'Create Goal';
+    document.getElementById('deleteGoalBtn').style.display = 'none';
+
+    // Reset toggles
+    selectedCurrency = 'USD';
+    selectedReminder = 'weekly';
+    document.querySelectorAll('.currency-toggle button').forEach((b, i) => b.classList.toggle('active', i === 0));
+    document.querySelectorAll('.reminder-options button').forEach((b, i) => b.classList.toggle('active', i === 1));
+
+    document.getElementById('newGoalModal').classList.add('active');
+  }
+
+  function openEditGoal(id) {
+    const g = goals.find(x => x.id === id);
+    if (!g) return;
+
+    editingGoalId = id;
+    document.getElementById('modalTitle').textContent = 'Edit Goal';
+    document.getElementById('goalName').value = g.name;
+    document.getElementById('goalTarget').value = g.target;
+    document.getElementById('goalDeadline').value = g.deadline;
+    document.getElementById('saveGoalBtn').textContent = 'Save Changes';
+    document.getElementById('deleteGoalBtn').style.display = 'block';
+
+    selectedCurrency = g.currency;
+    selectedReminder = g.reminder;
+    document.querySelectorAll('.currency-toggle button').forEach(b => {
+      b.classList.toggle('active', b.textContent.includes(g.currency));
+    });
+    document.querySelectorAll('.reminder-options button').forEach(b => {
+      b.classList.toggle('active', b.textContent.toLowerCase().includes(g.reminder));
+    });
+
+    document.getElementById('newGoalModal').classList.add('active');
+  }
+
+  function closeModal() {
+    document.getElementById('newGoalModal').classList.remove('active');
+  }
+
+  function setCurrency(cur, btn) {
+    selectedCurrency = cur;
+    document.querySelectorAll('.currency-toggle button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  function setReminder(rem, btn) {
+    selectedReminder = rem;
+    document.querySelectorAll('.reminder-options button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  async function saveGoal() {
+    const name = document.getElementById('goalName').value.trim();
+    const target = parseInt(document.getElementById('goalTarget').value) || 0;
+    const deadline = document.getElementById('goalDeadline').value;
+
+    if (!name) return showToast('Please enter a goal name');
+    if (target <= 0) return showToast('Please enter a target amount');
+    if (!deadline) return showToast('Please pick a deadline');
+
+    if (editingGoalId) {
+      const g = goals.find(x => x.id === editingGoalId);
+      if (g) {
+        g.name = name;
+        g.target = target;
+        g.deadline = deadline;
+        g.currency = selectedCurrency;
+        g.reminder = selectedReminder;
+      }
+      showToast('Goal updated! ✏️');
+    } else {
+      goals.push({
+        id: 'g_' + Date.now(),
+        name, target, deadline,
+        currency: selectedCurrency,
+        reminder: selectedReminder,
+        saved: 0,
+        completed: false,
+        logs: []
+      });
+      showToast('Goal created! 🎯');
+    }
+
+    await persistGoals();
+    renderAll();
+    closeModal();
+  }
+
+  async function deleteGoal() {
+    if (!editingGoalId) return;
+    goals = goals.filter(g => g.id !== editingGoalId);
+    await persistGoals();
+    renderAll();
+    closeModal();
+    showToast('Goal deleted');
+  }
+
+  // ── Goal Actions (tap on card) ──
+  function openGoalActions(id) {
+    const g = goals.find(x => x.id === id);
+    if (!g) return;
+
+    if (g.completed) {
+      openEditGoal(id);
+      return;
+    }
+
+    // Open log savings modal
+    loggingGoalId = id;
+    const sym = g.currency === 'USD' ? '$' : '';
+    const suffix = g.currency === 'UZS' ? ' soʻm' : '';
+    const remaining = g.target - g.saved;
+
+    document.getElementById('logGoalInfo').textContent =
+      g.name + ' — ' + sym + g.saved.toLocaleString() + suffix + ' / ' + sym + g.target.toLocaleString() + suffix;
+
+    // Quick amounts
+    const qa = document.getElementById('quickAmounts');
+    const quicks = g.currency === 'USD'
+      ? [10, 25, 50, 100, 200, 500]
+      : [50000, 100000, 200000, 500000, 1000000, 2000000];
+    qa.innerHTML = quicks.map(a =>
+      `<button onclick="document.getElementById('logAmount').value=${a}">${g.currency === 'USD' ? '$' : ''}${a.toLocaleString()}${g.currency === 'UZS' ? '' : ''}</button>`
+    ).join('');
+
+    document.getElementById('logAmount').value = '';
+
+    // Show mark complete if close enough
+    const pct = g.target > 0 ? g.saved / g.target * 100 : 0;
+    document.getElementById('markCompleteBtn').style.display = pct >= 80 ? 'block' : 'none';
+
+    document.getElementById('logSavingsModal').classList.add('active');
+  }
+
+  function closeLogModal() {
+    document.getElementById('logSavingsModal').classList.remove('active');
+  }
+
+  async function confirmLog() {
+    const amount = parseInt(document.getElementById('logAmount').value) || 0;
+    if (amount <= 0) return showToast('Enter an amount');
+
+    const g = goals.find(x => x.id === loggingGoalId);
+    if (!g) return;
+
+    g.saved += amount;
+    g.logs.push({ amount, date: new Date().toISOString() });
+
+    if (g.saved >= g.target) {
+      g.completed = true;
+      showToast('🎉 Goal reached! Congratulations!');
+    } else {
+      const sym = g.currency === 'USD' ? '$' : '';
+      const suffix = g.currency === 'UZS' ? ' soʻm' : '';
+      showToast('Saved ' + sym + amount.toLocaleString() + suffix + ' ✓');
+    }
+
+    await persistGoals();
+    renderAll();
+    closeLogModal();
+  }
+
+  async function markComplete() {
+    const g = goals.find(x => x.id === loggingGoalId);
+    if (!g) return;
+    g.completed = true;
+    await persistGoals();
+    renderAll();
+    closeLogModal();
+    showToast('🎉 Goal completed!');
+  }
+
+  // ── Helpers ──
+  function formatDate(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+  }
+
+  // ── Modal close on overlay click ──
+  document.getElementById('newGoalModal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+  document.getElementById('logSavingsModal').addEventListener('click', function(e) {
+    if (e.target === this) closeLogModal();
+  });
+
+  // ── Start ──
+  init();
+</script>
+</body>
+</html>
